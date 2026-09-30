@@ -1,190 +1,90 @@
-import streamlit as st
-import streamlit.components.v1 as components
+import pygame
+import sys
+import random
 
-# 1. Konfigurasi Awal Jendela Web
-st.set_page_config(page_title="Gates of Olympus 1000 - Web Edition", page_icon="🎰", layout="centered")
+pygame.init()
 
-st.title("🎰 Zeus 1000 Simulator (Web Clone)")
-st.write("Mode Developer: Di-setting Pasti Pecah Perkalian X1000!")
+# 1. Sesuaikan resolusi layar agar pas dengan aspek rasio gambar asli
+LEBAR_LAYAR = 1000
+TINGGI_LAYAR = 800
+layar = pygame.display.set_mode((LEBAR_LAYAR, TINGGI_LAYAR))
+pygame.display.set_caption("Gates of Olympus 1000 - Custom Developer Mode")
+
+# 2. LOAD ASET GAMBAR ASLI (Pastikan file gambar ini sudah ada di foldermu)
+try:
+    img_background = pygame.image.load("bg_olympus.png")
+    img_zeus = pygame.image.load("zeus_character.png")
+    img_tombol_spin = pygame.image.load("tombol_spin.png")
+    
+    # Load gambar simbol-simbol asli
+    img_mahkota = pygame.image.load("sym_mahkota.png")
+    img_jam_pasir = pygame.image.load("sym_jampasir.png")
+    img_cincin = pygame.image.load("sym_cincin.png")
+except:
+    print("Tips: Untuk hasil sama persis, siapkan file gambar .png asli di folder kodinganmu!")
+
+# 3. SETTINGAN CHEAT: Matriks Grid 6x5 Pasti Menang
+# Game asli menggunakan grid 6 kolom x 5 baris. Kita setting agar semuanya berisi Mahkota (Maksimal Win)
+grid_pasti_menang = [
+    ["👑", "👑", "👑", "👑", "👑", "👑"],
+    ["👑", "👑", "👑", "👑", "👑", "👑"],
+    ["👑", "👑", "👑", "👑", "👑", "👑"],
+    ["👑", "👑", "👑", "👑", "👑", "👑"],
+    ["👑", "👑", "👑", "👑", "👑", "👑"]
+]
+
+font_hud = pygame.font.SysFont("Arial", 24, bold=True)
+saldo_fiktif = 100000
+win_fiktif = 0
 
 # ==============================================================================
-# MENYUNTIKKAN GAME HTML5 & JAVASCRIPT KE DALAM STREAMLIT
+# GAME LOOP
 # ==============================================================================
-html5_game_code = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            background-color: #110924;
-            color: white;
-            font-family: 'Arial', sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 10px;
-        }
-        .game-container {
-            max-width: 500px;
-            margin: auto;
-            background: radial-gradient(circle, #251242 0%, #0f061d 100%);
-            border: 4px solid #ffd700;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 0 30px #00e6ff;
-        }
-        .header-panel {
-            display: flex;
-            justify-content: space-between;
-            font-weight: bold;
-            color: #ffd700;
-            font-size: 18px;
-            margin-bottom: 15px;
-        }
-        .slot-machine {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin: 20px 0;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 15px;
-            border-radius: 10px;
-            border: 2px solid #572d8c;
-        }
-        .reel {
-            width: 90px;
-            height: 100px;
-            background-color: #2e1c4e;
-            border: 3px solid #00e6ff;
-            border-radius: 10px;
-            font-size: 55px;
-            line-height: 100px;
-            text-align: center;
-            transition: all 0.1s ease;
-        }
-        .zeus-status {
-            font-size: 20px;
-            font-weight: bold;
-            color: #00e6ff;
-            height: 30px;
-            margin: 15px 0;
-            text-shadow: 0 0 10px #00e6ff;
-        }
-        .multiplier-badge {
-            display: inline-block;
-            background: linear-gradient(45deg, #ff007f, #7f00ff);
-            color: white;
-            padding: 10px 20px;
-            font-size: 24px;
-            font-weight: bold;
-            border-radius: 20px;
-            border: 2px solid #ffd700;
-            box-shadow: 0 0 15px #ff007f;
-            display: none;
-            animation: pulse 1s infinite;
-        }
-        .spin-button {
-            background: linear-gradient(180deg, #ffd700 0%, #b8860b 100%);
-            color: black;
-            border: none;
-            padding: 15px 40px;
-            font-size: 22px;
-            font-weight: bold;
-            border-radius: 30px;
-            cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            width: 100%;
-        }
-        .spin-button:active {
-            transform: scale(0.98);
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-    </style>
-</head>
-<body>
-
-<div class="game-container">
-    <div class="header-panel">
-        <div id="saldo-display">SALDO: Pk 50,000</div>
-        <div id="win-display" style="color: #50ff64;">WIN: Pk 0</div>
-    </div>
-
-    <!-- Tampilan Visual Gulungan Game -->
-    <div class="slot-machine">
-        <div id="reel1" class="reel">👑</div>
-        <div id="reel2" class="reel">👑</div>
-        <div id="reel3" class="reel">👑</div>
-    </div>
-
-    <div id="zeus-text" class="zeus-status">⚡ Kakek Zeus Bersiap Menyambar... ⚡</div>
-    
-    <div id="multiplier" class="multiplier-badge">⚡ X1000 ⚡</div>
-    
-    <br><br>
-    <button class="spin-button" onclick="startSpin()">⚡ SPIN (CHEAT MODE) ⚡</button>
-</div>
-
-<script>
-    let saldo = 50000;
-    const simbols = ["👑", "⏳", "💍", "🔮"];
-
-    function startSpin() {
-        if (saldo < 1000) {
-            alert("Saldo Demo Habis!");
-            return;
-        }
-
-        saldo -= 1000;
-        document.getElementById("saldo-display").innerText = "SALDO: Pk " + saldo.toLocaleString();
-        document.getElementById("multiplier").style.display = "none";
-        document.getElementById("win-display").innerText = "WIN: Pk 0";
-        document.getElementById("zeus-text").innerText = "⚡ Gulungan Berputar... ⚡";
-
-        // Efek Animasi Acak Cepat (Simulasi Spin Nyata)
-        let count = 0;
-        let interval = setInterval(() => {
-            document.getElementById("reel1").innerText = simbols[Math.floor(Math.random() * simbols.length)];
-            document.getElementById("reel2").innerText = simbols[Math.floor(Math.random() * simbols.length)];
-            document.getElementById("reel3").innerText = simbols[Math.floor(Math.random() * simbols.length)];
-            count++;
+while True:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
             
-            if (count > 10) {
-                clearInterval(interval);
-                triggerJackpot(); // Jalankan settingan mutlak menang
-            }
-        }, 80);
-    }
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                # Logika ketika tombol SPASI ditekan: Saldo berkurang, dan langsung set WIN meledak
+                saldo_fiktif -= 2000
+                win_fiktif = 2000 * 1000 # Menang Perkalian X1000 fiktif
+                saldo_fiktif += win_fiktif
 
-    function triggerJackpot() {
-        // KUNCI SETTINGAN: Memaksa gambar selalu Mahkota Emas Kembar 3 (Simbol Tertinggi)
-        document.getElementById("reel1").innerText = "👑";
-        document.getElementById("reel2").innerText = "👑";
-        document.getElementById("reel3").innerText = "👑";
+    # --- PROSES MENGGAMBAR VISUAL PERSIS SEPERTI DI GAMBAR ---
+    # 1. Tempel Gambar Background Istana Langit
+    try: layar.blit(img_background, (0, 0))
+    except: layar.fill((25, 15, 40)) # Jika gambar belum ada, pakai warna dasar ungu
 
-        // Memunculkan sambaran petir pengali X1000 mutlak
-        document.getElementById("zeus-text").innerText = "⚡ PETIR SENSASIONAL X1000 TURUN! ⚡";
-        document.getElementById("multiplier").style.display = "inline-block";
+    # 2. Tempel Gambar Karakter Kakek Zeus di Sebelah Kanan
+    try: layar.blit(img_zeus, (800, 200))
+    except: pygame.draw.rect(layar, (0, 230, 255), (820, 250, 150, 300))
 
-        // Hitung skor fiktif kemenangan besar
-        let menang = 5000 * 1000; 
-        saldo += menang;
+    # 3. Menggambar Grid 6x5 Mengikuti Isi Matriks Jalur Cheat
+    for baris in range(5):
+        for kolom in range(6):
+            posisi_x = 180 + (kolom * 100) # Jarak antar kolom simbol
+            posisi_y = 180 + (baris * 90)   # Jarak antar baris simbol
+            
+            # Tempel gambar simbol asli berdasarkan hasil acak/cheat
+            try:
+                layar.blit(img_mahkota, (posisi_x, posisi_y))
+            except:
+                # Jika file gambar belum ada, render teks emoji sementara di koordinat tersebut
+                font_emoji = pygame.font.SysFont("Segoe UI Emoji", 45)
+                txt_simbol = font_emoji.render(grid_pasti_menang[baris][kolom], True, (255,255,255))
+                layar.blit(txt_simbol, (posisi_x, posisi_y))
 
-        document.getElementById("saldo-display").innerText = "SALDO: Pk " + saldo.toLocaleString();
-        document.getElementById("win-display").innerText = "WIN: Pk " + menang.toLocaleString();
-    }
-</script>
+    # 4. Gambar Panel Informasi Angka Kredit & Taruhan di bagian bawah
+    txt_kredit = font_hud.render(f"KREDIT Rp {saldo_fiktif:,}.00", True, (255, 255, 255))
+    txt_win = font_hud.render(f"KEMENANGAN: Rp {win_fiktif:,}.00", True, (80, 255, 100))
+    layar.blit(txt_kredit, (200, 700))
+    layar.blit(txt_win, (200, 660))
 
-</body>
-</html>
-"""
+    # 5. Tempel Gambar Tombol Putar Melingkar di Pojok Kanan Bawah
+    try: layar.blit(img_tombol_spin, (800, 650))
+    except: pygame.draw.circle(layar, (255, 215, 0), (850, 700), 40)
 
-# Menyematkan (Embed) komponen HTML5 interaktif ke halaman Streamlit
-# Menggunakan ukuran tinggi 480 piksel agar pas di layar PC dan HP pacar/temanmu
-components.html(html5_game_code, height=480)
-
-st.write("---")
-st.caption("Klik tombol SPIN di atas, sistem Javascript akan mensimulasikan putaran acak lalu menguncinya ke kemenangan mutlak X1000.")
+    pygame.display.update()
